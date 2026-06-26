@@ -19,10 +19,22 @@ export interface ParseValidationError {
   line?: number;
 }
 
+export interface ActiveSchemaPackLike {
+  page_types: ReadonlyArray<{
+    name: string;
+    path_prefixes: ReadonlyArray<string>;
+    aliases?: ReadonlyArray<string>;
+    subtypes?: ReadonlyArray<{
+      name: string;
+      when: { path_pattern?: string; frontmatter_field?: string; frontmatter_value?: unknown };
+    }>;
+  }>;
+}
+
 export interface ParseOpts {
-  /** When true, errors[] is populated. Existing callers unaffected. */
+  /** Enable structural validation (frontmatter guardrail Phase 4). */
   validate?: boolean;
-  /** When validate is true and frontmatter has a `slug:` field that doesn't
+  /** Expected slug from caller/path; when provided and frontmatter slug does not
    *  match expectedSlug, emits SLUG_MISMATCH. */
   expectedSlug?: string;
   /**
@@ -32,10 +44,14 @@ export interface ParseOpts {
    * pre-v0.39 hardcoded behavior (preserves byte-for-byte parity gate
    * `test/regressions/gbrain-base-equivalence.test.ts`).
    *
+   * v0.42 Plan 006 — explicit frontmatter aliases are canonicalized through
+   * `page_types[].aliases` before import, so a legacy `type: portfolio-company`
+   * stays queryable as canonical `company` without editing every source file.
+   *
    * Callers thread this from `loadActivePack(ctx)` once per command —
    * NEVER per file inside sync, per codex perf finding #7.
    */
-  activePack?: { page_types: ReadonlyArray<{ name: string; path_prefixes: ReadonlyArray<string> }> };
+  activePack?: ActiveSchemaPackLike;
 }
 
 export interface ParsedMarkdown {
@@ -132,7 +148,10 @@ export function parseMarkdown(
   // coerceFrontmatterString turns a scalar/date into a usable string (a date slug
   // `2024-06-01` is legitimate); the NON_STRING_FIELD lint finding below still
   // surfaces the un-quoted field so it can be cleaned up.
-  const type = coerceFrontmatterString(frontmatter.type) || (
+  const frontmatterType = coerceFrontmatterString(frontmatter.type);
+  const type = (frontmatterType
+    ? (opts?.activePack ? canonicalizeTypeFromPack(frontmatterType, opts.activePack) : frontmatterType)
+    : undefined) || (
     opts?.activePack ? inferTypeFromPack(filePath, opts.activePack) : inferType(filePath)
   );
   const title = coerceFrontmatterString(frontmatter.title).trim() || inferTitle(filePath);
@@ -487,9 +506,18 @@ function inferType(filePath?: string): PageType {
  * test against `'/' + prefix` so `people/` matches `/people/` inside
  * the full path.
  */
+export function canonicalizeTypeFromPack(type: string, pack: ActiveSchemaPackLike): PageType {
+  const normalized = type.trim();
+  for (const pt of pack.page_types) {
+    if (pt.name === normalized) return pt.name;
+    if ((pt.aliases ?? []).includes(normalized)) return pt.name;
+  }
+  return normalized as PageType;
+}
+
 export function inferTypeFromPack(
   filePath: string | undefined,
-  pack: { page_types: ReadonlyArray<{ name: string; path_prefixes: ReadonlyArray<string> }> },
+  pack: ActiveSchemaPackLike,
 ): PageType {
   if (!filePath) return 'concept';
   // Empty pack → fall back to gbrain-base hardcoded defaults.

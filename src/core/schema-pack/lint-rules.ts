@@ -91,27 +91,14 @@ export const aliasDeclaredByTwoTypes: LintRule = (manifest) => {
   return issues;
 };
 
-export const aliasReferencesUndeclaredType: LintRule = (manifest) => {
-  // codex C14 — alias should be a known type OR a known alias of another
-  // type. For v0.40.6.0 we lint the simpler case: alias must match a
-  // declared page_type name. Closure validation is a v0.41+ extension.
-  const issues: LintIssue[] = [];
-  const typeNames = new Set(manifest.page_types.map((t) => t.name));
-  for (const t of manifest.page_types) {
-    for (const a of t.aliases) {
-      if (!typeNames.has(a)) {
-        issues.push({
-          rule: 'alias_references_undeclared_type',
-          severity: 'warning',
-          message: `type '${t.name}' aliases '${a}' which is not a declared page_type in this pack`,
-          pack: manifest.name,
-          type: t.name,
-          hint: `add a page_type for '${a}' OR remove the alias`,
-        });
-      }
-    }
-  }
-  return issues;
+export const aliasReferencesUndeclaredType: LintRule = (_manifest) => {
+  // v0.42 Plan 006: page_type aliases are intentionally allowed to name
+  // legacy/non-declared type strings (`article`, `portfolio-company`, `notes`).
+  // They are not references to other page_types; they are inbound synonyms that
+  // canonicalize to the owning type at import/query time. Keep duplicate-owner
+  // and shadow checks above, but do not warn merely because an alias is not a
+  // declared canonical page_type.
+  return [];
 };
 
 export const enrichableTypesUndeclared: LintRule = (manifest) => {

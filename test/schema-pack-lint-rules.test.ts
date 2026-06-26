@@ -100,25 +100,17 @@ describe('aliasDeclaredByTwoTypes', () => {
 });
 
 describe('aliasReferencesUndeclaredType', () => {
-  it('clean: aliases all match declared types', async () => {
-    const m = mk({ page_types: [
-      baseType({ name: 'person' }),
-      baseType({ name: 'researcher', aliases: ['person'] }),
-    ] });
+  it('allows aliases to name legacy/non-declared type strings', async () => {
+    const m = mk({ page_types: [baseType({ name: 'media', aliases: ['article', 'papers'] })] });
     expect(await aliasReferencesUndeclaredType(m)).toEqual([]);
   });
 
-  it('flags alias pointing at undeclared type', async () => {
-    const m = mk({ page_types: [baseType({ name: 'r', aliases: ['ghost'] })] });
-    const issues = await aliasReferencesUndeclaredType(m);
-    expect(issues.length).toBe(1);
-    expect(issues[0]!.severity).toBe('warning');
-    expect(issues[0]!.message).toContain('ghost');
-  });
-
-  it('flags multiple undeclared references separately', async () => {
-    const m = mk({ page_types: [baseType({ name: 'r', aliases: ['g1', 'g2'] })] });
-    expect((await aliasReferencesUndeclaredType(m)).length).toBe(2);
+  it('does not duplicate alias ownership/shadow validation handled by other rules', async () => {
+    const m = mk({ page_types: [
+      baseType({ name: 'company', aliases: ['portfolio-company'] }),
+      baseType({ name: 'note', aliases: ['notes'] }),
+    ] });
+    expect(await aliasReferencesUndeclaredType(m)).toEqual([]);
   });
 });
 

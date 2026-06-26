@@ -77,6 +77,37 @@ Content
     expect(parsed.type).toBe('person');
   });
 
+  test('canonicalizes frontmatter type aliases through active schema pack', () => {
+    const md = `---
+type: portfolio-company
+title: Company
+---
+Body
+`;
+    const parsed = parseMarkdown(md, 'wiki/companies/company.md', {
+      activePack: {
+        page_types: [
+          { name: 'company', path_prefixes: ['wiki/companies/'], aliases: ['portfolio-company'] },
+        ],
+      },
+    });
+    expect(parsed.type).toBe('company');
+    expect(parsed.frontmatter).not.toHaveProperty('type');
+  });
+
+  test('leaves unknown frontmatter type untouched when no alias owns it', () => {
+    const md = `---
+type: custom-local
+title: Custom
+---
+Body
+`;
+    const parsed = parseMarkdown(md, 'notes/custom.md', {
+      activePack: { page_types: [{ name: 'note', path_prefixes: ['notes/'], aliases: ['notes'] }] },
+    });
+    expect(parsed.type).toBe('custom-local');
+  });
+
   test('infers slug from file path', () => {
     const md = `---
 type: concept
